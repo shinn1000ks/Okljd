@@ -1,0 +1,121 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "*.zip"
+      - "**/*.zip"
+      - ".github/workflows/android.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find Android project ZIP
+        shell: bash
+        run: |
+          set -e
+
+          ZIP_FILE=$(find . -type f -name "*.zip" -not -path "./.git/*" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No Android project ZIP file found."
+            exit 1
+          fi
+
+          echo "Found ZIP: $ZIP_FILE"
+          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
+
+      - name: Extract Android project
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p project
+          unzip -q "$ZIP_FILE" -d project
+
+          echo "Extracted project:"
+          find project -maxdepth 3 -type f | head -100
+
+      - name: Locate Gradle project
+        shell: bash
+        run: |
+          set -e
+
+          GRADLEW=$(find project -type f -name "gradlew" | head -n 1)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: Could not find gradlew inside the ZIP."
+            echo "The uploaded ZIP does not appear to contain a standard Android Gradle project."
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
+
+          echo "Gradle wrapper: $GRADLEW"
+          echo "Android project directory: $PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Detect Java version
+        shell: bash
+        run: |
+          set -e
+
+          if grep -RqsE "com\.android\.tools\.build:gradle:[89]\.|com\.android\.application" "$PROJECT_DIR" 2>/dev/null; then
+            echo "Using Java 17"
+            echo "JAVA_VERSION=17" >> "$GITHUB_ENV"
+          else
+            echo "Using Java 17"
+            echo "JAVA_VERSION=17" >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make Gradle executable
+        shell: bash
+        run: |
+          chmod +x "$PROJECT_DIR/gradlew"
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Find generated APK
+        shell: bash
+        run: |
+          set -e
+
+          APK=$(find "$PROJECT_DIR" -type f -name "*.apk" | head -n 1)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+
+          echo "APK found: $APK"
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: xianxia-cultivator-debug-apk
+          path: ${{ env.APK_PATH }}
+          if-no-files-found: error
