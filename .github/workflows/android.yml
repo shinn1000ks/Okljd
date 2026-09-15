@@ -36,11 +36,12 @@ jobs:
         run: |
           set -e
 
+          rm -rf project
           mkdir -p project
+
           unzip -q "$ZIP_FILE" -d project
 
-          echo "Extracted project:"
-          find project -maxdepth 3 -type f | head -100
+          echo "ZIP extracted successfully."
 
       - name: Locate Gradle project
         shell: bash
@@ -50,39 +51,37 @@ jobs:
           GRADLEW=$(find project -type f -name "gradlew" | head -n 1)
 
           if [ -z "$GRADLEW" ]; then
-            echo "ERROR: Could not find gradlew inside the ZIP."
-            echo "The uploaded ZIP does not appear to contain a standard Android Gradle project."
+            echo "ERROR: gradlew was not found inside the ZIP."
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$GRADLEW")
 
-          echo "Gradle wrapper: $GRADLEW"
-          echo "Android project directory: $PROJECT_DIR"
-
+          echo "Gradle project found at: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Detect Java version
-        shell: bash
-        run: |
-          set -e
-
-          if grep -RqsE "com\.android\.tools\.build:gradle:[89]\.|com\.android\.application" "$PROJECT_DIR" 2>/dev/null; then
-            echo "Using Java 17"
-            echo "JAVA_VERSION=17" >> "$GITHUB_ENV"
-          else
-            echo "Using Java 17"
-            echo "JAVA_VERSION=17" >> "$GITHUB_ENV"
-          fi
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ""
+
+      - name: Detect Android SDK requirements
+        shell: bash
+        run: |
+          set -e
+
+          echo "Checking Android project configuration..."
+
+          find "$PROJECT_DIR" -maxdepth 3 \
+            \( -name "*.gradle" -o -name "*.gradle.kts" \) \
+            -type f \
+            -print
 
       - name: Make Gradle executable
         shell: bash
@@ -96,7 +95,7 @@ jobs:
 
           cd "$PROJECT_DIR"
 
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Find generated APK
         shell: bash
@@ -110,7 +109,9 @@ jobs:
             exit 1
           fi
 
-          echo "APK found: $APK"
+          echo "APK found:"
+          echo "$APK"
+
           echo "APK_PATH=$APK" >> "$GITHUB_ENV"
 
       - name: Upload APK
