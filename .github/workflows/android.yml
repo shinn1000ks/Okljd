@@ -71,17 +71,27 @@ jobs:
         with:
           packages: ""
 
-      - name: Detect Android SDK requirements
+      - name: Generate debug keystore
         shell: bash
         run: |
           set -e
 
-          echo "Checking Android project configuration..."
+          if [ ! -f "$PROJECT_DIR/debug.keystore" ]; then
+            keytool -genkeypair \
+              -v \
+              -keystore "$PROJECT_DIR/debug.keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
 
-          find "$PROJECT_DIR" -maxdepth 3 \
-            \( -name "*.gradle" -o -name "*.gradle.kts" \) \
-            -type f \
-            -print
+            echo "debug.keystore created."
+          else
+            echo "debug.keystore already exists."
+          fi
 
       - name: Make Gradle executable
         shell: bash
