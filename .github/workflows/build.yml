@@ -1,0 +1,40 @@
+name: Build Android APK from ZIP
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Unzip the project file
+      run: |
+        # Repository ထဲမှာရှိတဲ့ zip ဖိုင်ကို ဖြည်ပါမည်
+        unzip -q *.zip -d project_folder
+        
+        # gradlew ဖိုင်ကို Run နိုင်ရန် Permission ပေးပါမည်
+        chmod +x project_folder/gradlew
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Build Debug APK
+      run: |
+        cd project_folder
+        ./gradlew assembleDebug
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: myanmar-pdf-to-txt-apk
+        path: project_folder/app/build/outputs/apk/debug/app-debug.apk
+        
